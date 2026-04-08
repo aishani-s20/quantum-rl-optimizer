@@ -1,0 +1,2 @@
+[console_scripts]
+server = quantum_openenv_env.server.app:main

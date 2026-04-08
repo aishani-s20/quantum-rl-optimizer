@@ -1,0 +1,4 @@
+name: "quantum_circuit_optimizer"
+version: "0.1.0"
+description: "An OpenEnv environment for optimizing multi-qubit quantum circuits using RL/LLM agents."
+entrypoint: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment"
