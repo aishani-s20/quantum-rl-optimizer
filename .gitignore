@@ -3,4 +3,4 @@ __pycache__
 quantum_env
 *.pyc
 .env
-.openenv_quantum_openenv_env.egg-info
+openenv_quantum_openenv_env.egg-info/
