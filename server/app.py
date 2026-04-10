@@ -37,7 +37,7 @@ except Exception as e:  # pragma: no cover
 
 try:
     from models import QuantumAction, QuantumObservation
-    from quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
+    from .quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
 except ModuleNotFoundError:
     from models import QuantumAction, QuantumObservation
     from server.quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
@@ -60,7 +60,7 @@ def main():
     This function enables running the server without Docker:
         uv run --project . server
         uv run --project . server --port 8001
-        python -m quantum_openenv_env.server.app
+        python -m server.app
 
     Args:
         host: Host address to bind to (default: "0.0.0.0")
@@ -68,7 +68,7 @@ def main():
 
     For production deployments, consider using uvicorn directly with
     multiple workers:
-        uvicorn quantum_openenv_env.server.app:app --workers 4
+        uvicorn server.app:app --workers 4
     """
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

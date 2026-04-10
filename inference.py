@@ -21,8 +21,8 @@ load_dotenv()
 
 from openai import OpenAI
 
-from quantum_openenv_env.server.quantum_openenv_env_environment import GRADERS
-from quantum_openenv_env.client import QuantumOpenenvEnv
+from server.quantum_openenv_env_environment import GRADERS
+from client import QuantumOpenenvEnv
 from models import QuantumAction
 
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")

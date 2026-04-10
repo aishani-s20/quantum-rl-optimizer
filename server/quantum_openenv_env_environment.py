@@ -80,30 +80,42 @@ TASK_CONFIGS = {
 # Graders
 # ============================================================================
 
-class UniversalGrader:
-    """
-    Relative Compression Grader (NP-Hard Approach).
-    Extracts the initial circuit length from metadata.
-    """
+def universal_grade_logic(observation: QuantumObservation) -> float:
+    """Core logic for relative compression grading."""
+    final_count = observation.gate_count
+    metadata = observation.metadata or {}
+    initial_count = metadata.get("initial_count", final_count)
+    
+    if initial_count == 0:
+        return 1.0
+        
+    compression_ratio = (initial_count - final_count) / initial_count
+    return max(0.0, min(1.0, compression_ratio))
+
+class EasyGrader:
     @staticmethod
     def grade(observation: QuantumObservation) -> float:
-        final_count = observation.gate_count
-        metadata = observation.metadata or {}
-        initial_count = metadata.get("initial_count", final_count)
-        
-        if initial_count == 0:
-            return 1.0
-            
-        compression_ratio = (initial_count - final_count) / initial_count
-        return max(0.0, min(1.0, compression_ratio))
+        return universal_grade_logic(observation)
 
-# Exporting for inference.py
+class MediumGrader:
+    @staticmethod
+    def grade(observation: QuantumObservation) -> float:
+        return universal_grade_logic(observation)
+
+class HardGrader:
+    @staticmethod
+    def grade(observation: QuantumObservation) -> float:
+        return universal_grade_logic(observation)
+
+# Exporting for inference.py and Hackathon Platform
 GRADERS = {
-    "easy": UniversalGrader.grade,
-    "medium": UniversalGrader.grade,
-    "hard": UniversalGrader.grade,
+    "easy": EasyGrader.grade,
+    "medium": MediumGrader.grade,
+    "hard": HardGrader.grade,
 }
 
+# Explicitly define TASKS list for the platform's static analyzer
+TASKS = ["easy", "medium", "hard"]
 
 # ============================================================================
 # Environment

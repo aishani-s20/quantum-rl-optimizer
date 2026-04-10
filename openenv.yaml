@@ -1,22 +1,4 @@
 name: "quantum_circuit_optimizer"
 version: "0.1.0"
 description: "An OpenEnv environment for optimizing multi-qubit quantum circuits using RL/LLM agents."
-entrypoint: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment"
-tasks:
-  - id: "easy"
-    name: "Easy Circuit Optimization"
-    description: "2 qubits, single-qubit gates only. Focuses on local cancellations."
-    difficulty: "easy"
-    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:UniversalGrader.grade"
-    
-  - id: "medium"
-    name: "Medium Circuit Optimization"
-    description: "4 qubits with basic CNOT/SWAP entanglement. Requires basic spatial swapping."
-    difficulty: "medium"
-    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:UniversalGrader.grade"
-    
-  - id: "hard"
-    name: "Hard Circuit Optimization"
-    description: "6 qubits with deep entanglement and complex blockades. Demands rigorous spatial reasoning."
-    difficulty: "hard"
-    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:UniversalGrader.grade"
+entrypoint: "server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment"
