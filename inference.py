@@ -186,9 +186,9 @@ async def main() -> None:
         if not result.observation.metadata:
             result.observation.metadata = {}
         result.observation.metadata["initial_count"] = initial_gate_count
-        
-        # Fetch the correct grader safely
-        grader = GRADERS.get(actual_task, GRADERS.get("hard"))
+
+        # Fetch the correct grader safely, falling back to the hard grader if the task name is missing
+        grader = GRADERS.get(actual_task, GRADERS["hard"])
         score = grader(result.observation)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
