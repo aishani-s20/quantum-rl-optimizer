@@ -80,37 +80,11 @@ TASK_CONFIGS = {
 # Graders
 # ============================================================================
 
-def grade_easy(observation: QuantumObservation) -> float:
-    """Independent grader for Easy Task."""
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
-    initial_count = metadata.get("initial_count", final_count)
-    if initial_count == 0:
-        return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
-
-def grade_medium(observation: QuantumObservation) -> float:
-    """Independent grader for Medium Task."""
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
-    initial_count = metadata.get("initial_count", final_count)
-    if initial_count == 0:
-        return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
-
-def grade_hard(observation: QuantumObservation) -> float:
-    """Independent grader for Hard Task."""
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
-    initial_count = metadata.get("initial_count", final_count)
-    if initial_count == 0:
-        return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
+# Graders are now defined in ../graders.py
 
 # Exporting for inference.py and Hackathon Platform
+from quantum_openenv_env.graders import grade_easy, grade_medium, grade_hard
+
 GRADERS = {
     "easy": grade_easy,
     "medium": grade_medium,
@@ -257,6 +231,19 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                     action_result = "identity_cnot_swap_to_cz"
 
         return self._build_observation(reward, action_result)
+
+    # Grader methods for OpenEnv validation
+    def grade_easy(self, observation: QuantumObservation) -> float:
+        """Grader for Easy Task."""
+        return grade_easy(observation)
+
+    def grade_medium(self, observation: QuantumObservation) -> float:
+        """Grader for Medium Task."""
+        return grade_medium(observation)
+
+    def grade_hard(self, observation: QuantumObservation) -> float:
+        """Grader for Hard Task."""
+        return grade_hard(observation)
 
     def _build_observation(self, reward: float, action_result: str) -> QuantumObservation:
         max_steps_reached = self._state.step_count >= 150
