@@ -6,9 +6,9 @@
 
 """Quantum Openenv Env Environment."""
 
-from .client import QuantumOpenenvEnv
-from .models import QuantumAction, QuantumObservation
-from .graders import grade_easy, grade_medium, grade_hard
+from client import QuantumOpenenvEnv
+from models import QuantumAction, QuantumObservation
+from graders import grade_easy, grade_medium, grade_hard
 
 __all__ = [
     "QuantumAction",

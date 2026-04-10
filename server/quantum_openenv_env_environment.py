@@ -20,10 +20,8 @@ from uuid import uuid4
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
-try:
-    from ..models import QuantumAction, QuantumGate, QuantumObservation
-except ImportError:
-    from models import QuantumAction, QuantumGate, QuantumObservation
+
+from models import QuantumAction, QuantumGate, QuantumObservation
 
 
 # ============================================================================
@@ -83,7 +81,7 @@ TASK_CONFIGS = {
 # Graders are now defined in ../graders.py
 
 # Exporting for inference.py and Hackathon Platform
-from quantum_openenv_env.graders import grade_easy, grade_medium, grade_hard
+from graders import grade_easy, grade_medium, grade_hard
 
 GRADERS = {
     "easy": grade_easy,

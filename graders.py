@@ -8,7 +8,7 @@
 Standalone graders for the Quantum Circuit Optimization Environment.
 """
 
-from .models import QuantumObservation
+from models import QuantumObservation
 
 
 def grade_easy(observation: QuantumObservation) -> float:

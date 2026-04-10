@@ -35,12 +35,8 @@ except Exception as e:  # pragma: no cover
         "openenv is required for the web interface. Install dependencies with '\n    uv sync\n'"
     ) from e
 
-try:
-    from models import QuantumAction, QuantumObservation
-    from .quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
-except ModuleNotFoundError:
-    from models import QuantumAction, QuantumObservation
-    from server.quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
+from models import QuantumAction, QuantumObservation
+from server.quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
 
 
 # Create the app with web interface and README integration

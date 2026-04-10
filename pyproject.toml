@@ -31,11 +31,12 @@ dev = [
 ]
 
 [project.scripts]
-# Server entry point - enables running via: uv run --project . server
-# or: python -m quantum_openenv_env.server.app
-server = "quantum_openenv_env.server.app:main"
+# Server entry point updated to match the standard layout
+server = "server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["quantum_openenv_env", "quantum_openenv_env.server"]
-package-dir = { "quantum_openenv_env" = ".", "quantum_openenv_env.server" = "server" }
+# We explicitly tell setuptools to package the 'server' folder 
+# and the standalone python scripts at the root level, without aliases.
+packages = ["server"]
+py-modules = ["client", "graders", "inference", "models"]
