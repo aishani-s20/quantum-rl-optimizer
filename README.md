@@ -118,6 +118,17 @@ uv pip install openenv-core
 uv sync
 ```
 
+### 2. Environment Variables
+
+Create a ```.env``` file in the root directory:
+
+```bash
+HF_TOKEN="your_huggingface_read_token"
+API_BASE_URL="[https://router.huggingface.co/v1](https://router.huggingface.co/v1)"
+MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
+QUANTUM_TASK="random"
+```
+
 | Variable | Description |
 |---|---|
 | `HF_TOKEN` | Your HuggingFace API token (read access) |
@@ -140,7 +151,19 @@ uv run python inference.py
 ```
  
 The inference script handles API errors gracefully and automatically parses JSON outputs into the strict Action Space schema.
- 
+
+
+### 5. Reproducing via Seed (For Judges)
+
+To test the deterministic generation and replicate our baseline scores, you can pass a specific seed to the environment during the reset phase in your client script.
+
+Simply modify the reset call in ```inference.py```:
+
+```bash
+# Pass any integer seed to guarantee the exact same initial circuit topography
+result = await env.reset(seed=42)
+```
+
 ---
 
 ## 📁 Project Structure
