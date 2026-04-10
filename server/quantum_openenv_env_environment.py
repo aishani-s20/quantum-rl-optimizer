@@ -81,7 +81,8 @@ TASK_CONFIGS = {
 # Graders are now defined in ../graders.py
 
 # Exporting for inference.py and Hackathon Platform
-from graders import grade_easy, grade_medium, grade_hard
+# Exporting for inference.py and Hackathon Platform
+from .graders import grade_easy, grade_medium, grade_hard
 
 GRADERS = {
     "easy": grade_easy,

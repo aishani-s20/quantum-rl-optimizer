@@ -7,7 +7,7 @@
 """Quantum Openenv Env environment server components."""
 
 from .quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
-from graders import grade_easy, grade_medium, grade_hard
+from .graders import grade_easy, grade_medium, grade_hard
 
 __all__ = [
     "QuantumCircuitOptimizationEnvironment",

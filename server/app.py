@@ -36,7 +36,7 @@ except Exception as e:  # pragma: no cover
     ) from e
 
 from models import QuantumAction, QuantumObservation
-from server.quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
+from .quantum_openenv_env_environment import QuantumCircuitOptimizationEnvironment
 
 
 # Create the app with web interface and README integration

@@ -8,7 +8,7 @@
 
 from client import QuantumOpenenvEnv
 from models import QuantumAction, QuantumObservation
-from graders import grade_easy, grade_medium, grade_hard
+from server.graders import grade_easy, grade_medium, grade_hard
 
 __all__ = [
     "QuantumAction",
