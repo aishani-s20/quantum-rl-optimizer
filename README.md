@@ -14,7 +14,7 @@ pinned: false
 
 ---
 
-## 🏆 Key Features for Judges
+## 🏆 Key Features
 * **NP-Hard Problem Space:** Moves beyond static text puzzles into multi-dimensional spatial reasoning.
 * **Deterministic Reproducibility (Seed Logic):** Fully supports the OpenEnv framework's episode seed. The engine guarantees the **exact same complex circuit** is generated for a given episode across different model runs, ensuring flawless grader reproducibility.
 * **Relative Compression Grader:** Dynamically scores agents based on mathematical compression ratios, adapting perfectly to any circuit depth.
@@ -97,13 +97,13 @@ This environment is designed to serve as a rigorous boundary test for frontier r
 
 | Model | Task | Result | Notes |
 |---|---|---|---|
-| Qwen 2.5 72B Instruct (Zero-Shot) | `easy` | 🟢 **Passing Baseline** | Successfully identifies and executes local cancellations (Score: ~0.15–0.30). |
-| Qwen 2.5 72B Instruct (Zero-Shot) | `medium` | ⚠️ **Borderline** | Attempts basic spatial swapping but frequently gets trapped by blocking gates. Usually falls just short of the 0.10 success threshold (Score: ~0.00–0.08). |
-| Qwen 2.5 72B Instruct (Zero-Shot) | `hard` | 🛡️ **Benchmark Limit** | Provides a highly complex layout that tests the absolute limits of current LLMs, establishing a rigorous 0.0 baseline. **(100% reproducible via episode seeds)**. |
+| Qwen 2.5 72B Instruct (Zero-Shot) | `easy` | **Passing Baseline** | Successfully identifies and executes local cancellations (Score: ~0.15–0.30). |
+| Qwen 2.5 72B Instruct (Zero-Shot) | `medium` | **Borderline** | Attempts basic spatial swapping but frequently gets trapped by blocking gates. Usually falls just short of the 0.10 success threshold (Score: ~0.00–0.08). |
+| Qwen 2.5 72B Instruct (Zero-Shot) | `hard` | **Benchmark Limit** | Provides a highly complex layout that tests the absolute limits of current LLMs, establishing a rigorous 0.0 baseline. **(100% reproducible via episode seeds)**. |
 
 > **Conclusion:** This environment successfully establishes an unsolved benchmark for testing algorithmic spatial planning, proving that advanced scaffolding (e.g., Tree-of-Thought or ReAct loops) is required for deep quantum compilation.
 > 
-> 🎯 **Judge's Note on Reproducibility:** You can reliably reproduce these exact baseline constraints. The environment fully supports OpenEnv episode seeding, guaranteeing the exact same initial circuit generation for any given seed across different runs.
+> **Note on Reproducibility:** You can reliably reproduce these exact baseline constraints. The environment fully supports OpenEnv episode seeding, guaranteeing the exact same initial circuit generation for any given seed across different runs.
 
 ---
 
@@ -153,7 +153,7 @@ uv run python inference.py
 The inference script handles API errors gracefully and automatically parses JSON outputs into the strict Action Space schema.
 
 
-### 5. Reproducing via Seed (For Judges)
+### 5. Reproducing via Seed
 
 To test the deterministic generation and replicate our baseline scores, you can pass a specific seed to the environment during the reset phase in your client script.
 
