@@ -117,7 +117,6 @@ GRADERS = {
     "hard": grade_hard,
 }
 
-# Explicitly define TASKS list for the platform's static analyzer
 TASKS = ["easy", "medium", "hard"]
 
 
