@@ -80,42 +80,46 @@ TASK_CONFIGS = {
 # Graders
 # ============================================================================
 
-def universal_grade_logic(observation: QuantumObservation) -> float:
-    """Core logic for relative compression grading."""
+def grade_easy(observation: QuantumObservation) -> float:
+    """Independent grader for Easy Task."""
     final_count = observation.gate_count
     metadata = observation.metadata or {}
     initial_count = metadata.get("initial_count", final_count)
-    
     if initial_count == 0:
         return 1.0
-        
     compression_ratio = (initial_count - final_count) / initial_count
     return max(0.0, min(1.0, compression_ratio))
 
-class EasyGrader:
-    @staticmethod
-    def grade(observation: QuantumObservation) -> float:
-        return universal_grade_logic(observation)
+def grade_medium(observation: QuantumObservation) -> float:
+    """Independent grader for Medium Task."""
+    final_count = observation.gate_count
+    metadata = observation.metadata or {}
+    initial_count = metadata.get("initial_count", final_count)
+    if initial_count == 0:
+        return 1.0
+    compression_ratio = (initial_count - final_count) / initial_count
+    return max(0.0, min(1.0, compression_ratio))
 
-class MediumGrader:
-    @staticmethod
-    def grade(observation: QuantumObservation) -> float:
-        return universal_grade_logic(observation)
-
-class HardGrader:
-    @staticmethod
-    def grade(observation: QuantumObservation) -> float:
-        return universal_grade_logic(observation)
+def grade_hard(observation: QuantumObservation) -> float:
+    """Independent grader for Hard Task."""
+    final_count = observation.gate_count
+    metadata = observation.metadata or {}
+    initial_count = metadata.get("initial_count", final_count)
+    if initial_count == 0:
+        return 1.0
+    compression_ratio = (initial_count - final_count) / initial_count
+    return max(0.0, min(1.0, compression_ratio))
 
 # Exporting for inference.py and Hackathon Platform
 GRADERS = {
-    "easy": EasyGrader.grade,
-    "medium": MediumGrader.grade,
-    "hard": HardGrader.grade,
+    "easy": grade_easy,
+    "medium": grade_medium,
+    "hard": grade_hard,
 }
 
 # Explicitly define TASKS list for the platform's static analyzer
 TASKS = ["easy", "medium", "hard"]
+
 
 # ============================================================================
 # Environment
