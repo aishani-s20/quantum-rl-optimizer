@@ -21,7 +21,7 @@ from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
 
-from models import QuantumAction, QuantumGate, QuantumObservation
+from quantum_openenv_env.models import QuantumAction, QuantumGate, QuantumObservation
 
 
 # ============================================================================
@@ -82,7 +82,7 @@ TASK_CONFIGS = {
 
 # Exporting for inference.py and Hackathon Platform
 # Exporting for inference.py and Hackathon Platform
-from .graders import grade_easy, grade_medium, grade_hard
+from quantum_openenv_env.server.graders import grade_easy, grade_medium, grade_hard
 
 GRADERS = {
     "easy": grade_easy,

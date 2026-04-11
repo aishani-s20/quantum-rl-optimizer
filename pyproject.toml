@@ -14,9 +14,7 @@ version = "0.1.0"
 description = "Quantum Openenv Env environment for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
-    # Core OpenEnv runtime (provides FastAPI server + HTTP client types)
     "openenv-core[core]>=0.2.2",
-    # Environment-specific dependencies
     "fastapi>=0.115.0",
     "uvicorn>=0.24.0",
     "pydantic>=2.0.0",
@@ -31,12 +29,9 @@ dev = [
 ]
 
 [project.scripts]
-# Server entry point updated to match the standard layout
-server = "server.app:main"
+server = "quantum_openenv_env.server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-# We explicitly tell setuptools to package the 'server' folder 
-# and the standalone python scripts at the root level, without aliases.
-packages = ["server"]
-py-modules = ["client", "inference", "models"]
+packages = ["quantum_openenv_env", "quantum_openenv_env.server"]
+package-dir = { "quantum_openenv_env" = ".", "quantum_openenv_env.server" = "server" }
