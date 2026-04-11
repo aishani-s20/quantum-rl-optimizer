@@ -5,31 +5,30 @@
 Standalone graders for the Quantum Circuit Optimization Environment.
 """
 
-from quantum_openenv_env.models import QuantumObservation
+# No package imports — fully self-contained so platform can import without installing
 
-def grade_easy(observation: QuantumObservation) -> float:
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
+def grade_easy(observation) -> float:
+    metadata = getattr(observation, 'metadata', {}) or {}
+    final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
         return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
+    return max(0.0, min(1.0, (initial_count - final_count) / initial_count))
 
-def grade_medium(observation: QuantumObservation) -> float:
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
+def grade_medium(observation) -> float:
+    metadata = getattr(observation, 'metadata', {}) or {}
+    final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
         return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
+    compression = (initial_count - final_count) / initial_count
+    return max(0.0, min(1.0, compression / 0.20))
 
-def grade_hard(observation: QuantumObservation) -> float:
-    final_count = observation.gate_count
-    metadata = observation.metadata or {}
+def grade_hard(observation) -> float:
+    metadata = getattr(observation, 'metadata', {}) or {}
+    final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
         return 1.0
-    compression_ratio = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression_ratio))
+    compression = (initial_count - final_count) / initial_count
+    return max(0.0, min(1.0, compression / 0.35))
