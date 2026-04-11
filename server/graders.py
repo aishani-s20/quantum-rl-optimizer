@@ -3,32 +3,40 @@
 
 """
 Standalone graders for the Quantum Circuit Optimization Environment.
+Scores are strictly within (0.0, 1.0) — never exactly 0.0 or 1.0.
 """
 
-# No package imports — fully self-contained so platform can import without installing
+
+def _strict(score: float) -> float:
+    """Clamp score to strictly (0.0, 1.0) as required by the platform."""
+    return max(0.01, min(0.99, score))
+
 
 def grade_easy(observation) -> float:
     metadata = getattr(observation, 'metadata', {}) or {}
     final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
-        return 1.0
-    return max(0.0, min(1.0, (initial_count - final_count) / initial_count))
+        return _strict(0.99)
+    compression = (initial_count - final_count) / initial_count
+    return _strict(compression)
+
 
 def grade_medium(observation) -> float:
     metadata = getattr(observation, 'metadata', {}) or {}
     final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
-        return 1.0
+        return _strict(0.99)
     compression = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression / 0.20))
+    return _strict(compression / 0.20)
+
 
 def grade_hard(observation) -> float:
     metadata = getattr(observation, 'metadata', {}) or {}
     final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
     if initial_count == 0:
-        return 1.0
+        return _strict(0.99)
     compression = (initial_count - final_count) / initial_count
-    return max(0.0, min(1.0, compression / 0.35))
+    return _strict(compression / 0.35)
