@@ -1,13 +1,15 @@
 """
-Inference Script Example
-===================================
-MANDATORY
-- Before submitting, ensure the following variables are defined in your environment configuration:
-    API_BASE_URL   The API endpoint for the LLM.
-    MODEL_NAME     The model identifier to use for inference.
-    HF_TOKEN       Your Hugging Face / API key.
-    LOCAL_IMAGE_NAME The name of the local image to use for the environment if you are using from_docker_image()
-                     method
+Inference Script
+================
+Runs the LLM agent against all 3 tasks (easy, medium, hard) and emits
+a [START] / [END] log line for each, which the hackathon platform requires
+to validate that all 3 tasks have graders.
+
+Required environment variables:
+    API_BASE_URL      The API endpoint for the LLM.
+    MODEL_NAME        The model identifier.
+    HF_TOKEN          Your Hugging Face / API key.
+    IMAGE_NAME        Docker image name (default: quantum_env).
 """
 
 import asyncio
@@ -15,6 +17,7 @@ import json
 import os
 import textwrap
 from typing import List, Optional
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,24 +29,25 @@ from quantum_openenv_env.client import QuantumOpenenvEnv
 from quantum_openenv_env.models import QuantumAction
 
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-IMAGE_NAME = os.getenv("IMAGE_NAME", "quantum_env") 
-
-
+IMAGE_NAME = os.getenv("IMAGE_NAME", "quantum_env")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
-TASK_NAME = os.getenv("QUANTUM_TASK", "random")
 BENCHMARK = os.getenv("QUANTUM_BENCHMARK", "quantum_optimization")
-MAX_STEPS = 50 
+
+MAX_STEPS = 50
 TEMPERATURE = 0.7
 MAX_TOKENS = 150
-SUCCESS_SCORE_THRESHOLD = 0.1  
+SUCCESS_SCORE_THRESHOLD = 0.1
+
+# All 3 tasks are always evaluated — this is what the platform requires
+ALL_TASKS = ["easy", "medium", "hard"]
 
 
 SYSTEM_PROMPT = textwrap.dedent(
     """
     You are an AI agent tasked with optimizing a multi-qubit quantum circuit.
     You will be given the current circuit as a list of gates with their index, name, and target_qubits.
-    
+
     You have 4 possible actions you can take at any index.
     Action 1: Cancel identical self-inverse gates (H, X, Y, Z, CNOT, SWAP). They must be on the same qubits and not blocked by intermediate gates sharing those qubits.
     Action 2: Swap adjacent commuting gates (gates that operate on entirely different qubits and do not overlap).
@@ -72,11 +76,18 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}", flush=True)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        flush=True,
+    )
 
-def build_user_prompt(step: int, circuit: List[object], last_reward: float, history: List[str]) -> str:
+
+def build_user_prompt(step: int, circuit: list, last_reward: float, history: List[str]) -> str:
     if circuit:
-        circuit_lines = [f"Index {i}: {gate.name} on qubits {gate.target_qubits}" for i, gate in enumerate(circuit)]
+        circuit_lines = [
+            f"Index {i}: {gate.name} on qubits {gate.target_qubits}"
+            for i, gate in enumerate(circuit)
+        ]
         circuit_block = "\n".join(circuit_lines)
     else:
         circuit_block = "Empty circuit"
@@ -95,7 +106,7 @@ def build_user_prompt(step: int, circuit: List[object], last_reward: float, hist
     ).strip()
 
 
-def get_model_message(client: OpenAI, step: int, circuit: List[object], last_reward: float, history: List[str]) -> str:
+def get_model_action(client: OpenAI, step: int, circuit: list, last_reward: float, history: List[str]) -> str:
     user_prompt = build_user_prompt(step, circuit, last_reward, history)
     try:
         completion = client.chat.completions.create(
@@ -109,16 +120,17 @@ def get_model_message(client: OpenAI, step: int, circuit: List[object], last_rew
             stream=False,
         )
         text = (completion.choices[0].message.content or "").strip()
-        return text if text else "hello"
+        return text if text else "{}"
     except Exception as exc:
         print(f"[DEBUG] Model request failed: {exc}", flush=True)
-        return "hello"
+        return "{}"
 
 
-async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-    env = await QuantumOpenenvEnv.from_docker_image(IMAGE_NAME)
-
+async def run_single_task(task_name: str, env: QuantumOpenenvEnv, client: OpenAI) -> None:
+    """
+    Run one full episode for a given task and emit [START] / [END] log lines.
+    The platform validates that all 3 tasks appear in these logs.
+    """
     history: List[str] = []
     rewards: List[float] = []
     steps_taken = 0
@@ -126,26 +138,17 @@ async def main() -> None:
     success = False
 
     try:
+        # Reset with the specific task seed for reproducibility
         result = await env.reset()
         circuit = result.observation.circuit
         last_reward = 0.0
-        
-        # --- BULLETPROOF FIX START ---
-        # 1. Track initial gate count locally so the grader never fails
+
         initial_gate_count = len(circuit)
-        
-        # 2. Infer the exact task from the circuit topology if metadata is missing
-        actual_task = result.observation.metadata.get("task") if result.observation.metadata else None
-        
-        if not actual_task or actual_task == "random":
-            num_qubits = result.observation.num_qubits
-            if num_qubits <= 2:
-                actual_task = "easy"
-            elif num_qubits <= 4:
-                actual_task = "medium"
-            else:
-                actual_task = "hard"
-        # --- BULLETPROOF FIX END ---
+
+        # Infer actual task name from metadata (env may be running in random mode)
+        actual_task = (result.observation.metadata or {}).get("task", task_name)
+        if actual_task not in ALL_TASKS:
+            actual_task = task_name
 
         log_start(task=actual_task, env=BENCHMARK, model=MODEL_NAME)
 
@@ -153,11 +156,11 @@ async def main() -> None:
             if result.done:
                 break
 
-            message = get_model_message(client, step, circuit, last_reward, history)
+            message = get_model_action(client, step, circuit, last_reward, history)
 
             try:
-                clean_message = message.replace("```json", "").replace("```", "").strip()
-                parsed = json.loads(clean_message)
+                clean = message.replace("```json", "").replace("```", "").strip()
+                parsed = json.loads(clean)
                 target_index = int(parsed["target_index"])
                 action_type = int(parsed.get("action_type", 1))
                 error = None
@@ -167,7 +170,6 @@ async def main() -> None:
                 action_type = 1
 
             result = await env.step(QuantumAction(target_index=target_index, action_type=action_type))
-
             reward = result.reward or 0.0
             done = result.done
 
@@ -182,22 +184,50 @@ async def main() -> None:
             if done:
                 break
 
-        # Inject the saved initial count back into metadata for the grader
+        # Inject initial count for grader
         if not result.observation.metadata:
             result.observation.metadata = {}
         result.observation.metadata["initial_count"] = initial_gate_count
 
-        # Fetch the correct grader safely, falling back to the hard grader if the task name is missing
         grader = GRADERS.get(actual_task, GRADERS["hard"])
         score = grader(result.observation)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
+    except Exception as exc:
+        print(f"[DEBUG] Task {task_name} episode error: {exc}", flush=True)
+
     finally:
-        try:
-            await env.close()
-        except Exception as e:
-            print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+
+
+async def main() -> None:
+    """
+    Run all 3 tasks sequentially.
+
+    The hackathon platform requires inference.py to produce a [START] / [END]
+    log pair for EACH of the 3 tasks (easy, medium, hard). Running only one
+    task causes "Not enough tasks with graders" in Phase 2 Task Validation.
+    """
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+    for task_name in ALL_TASKS:
+        print(f"\n{'='*60}", flush=True)
+        print(f"Running task: {task_name}", flush=True)
+        print(f"{'='*60}", flush=True)
+
+        # Start a fresh Docker environment instance for each task
+        # Pass task name so the env generates the right circuit type
+        env = await QuantumOpenenvEnv.from_docker_image(
+            IMAGE_NAME,
+            env_vars={"QUANTUM_TASK": task_name},
+        )
+        try:
+            await run_single_task(task_name, env, client)
+        finally:
+            try:
+                await env.close()
+            except Exception as e:
+                print(f"[DEBUG] env.close() error for task {task_name}: {e}", flush=True)
 
 
 if __name__ == "__main__":
