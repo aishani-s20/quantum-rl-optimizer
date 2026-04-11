@@ -10,7 +10,7 @@ Quantum Circuit Optimization Environment Implementation.
 Architecture:
 - Dynamically generated circuits across 3 difficulty tiers to challenge frontier models.
 - Instance-isolated PRNG (seeding) for strict reproducibility in server environments.
-- Relative Compression Grading: Evaluates agents on compression ratio rather than 
+- Relative Compression Grading: Evaluates agents on compression ratio rather than
   an absolute theoretical minimum, mirroring real-world NP-Hard quantum optimization constraints.
 """
 
@@ -19,7 +19,6 @@ from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
-
 
 from quantum_openenv_env.models import QuantumAction, QuantumGate, QuantumObservation
 
@@ -56,10 +55,10 @@ class TaskConfig:
             else:
                 gate_name = rng.choice(single_gates)
                 qubits = [rng.randint(0, self.num_qubits - 1)]
-                
+
             gate1 = QuantumGate(name=gate_name, target_qubits=qubits)
             gate2 = QuantumGate(name=gate_name, target_qubits=qubits)
-            
+
             insert_idx_1 = rng.randint(0, len(circuit))
             circuit.insert(insert_idx_1, gate1)
             insert_idx_2 = rng.randint(insert_idx_1, len(circuit))
@@ -67,30 +66,29 @@ class TaskConfig:
 
         return circuit
 
+
 TASK_CONFIGS = {
-    "easy": TaskConfig("easy", num_qubits=2, num_pairs=8, num_noise=4, use_entangling=False),
-    "medium": TaskConfig("medium", num_qubits=4, num_pairs=12, num_noise=8, use_entangling=True),
-    "hard": TaskConfig("hard", num_qubits=6, num_pairs=25, num_noise=20, use_entangling=True),
-}
-
-
-# ============================================================================
-# Graders
-# ============================================================================
-
-# Graders are now defined in ../graders.py
-
-# Exporting for inference.py and Hackathon Platform
-# Exporting for inference.py and Hackathon Platform
-from quantum_openenv_env.server.graders import grade_easy, grade_medium, grade_hard
-
-GRADERS = {
-    "easy": grade_easy,
-    "medium": grade_medium,
-    "hard": grade_hard,
+    "easy":   TaskConfig("easy",   num_qubits=2, num_pairs=8,  num_noise=4,  use_entangling=False),
+    "medium": TaskConfig("medium", num_qubits=4, num_pairs=12, num_noise=8,  use_entangling=True),
+    "hard":   TaskConfig("hard",   num_qubits=6, num_pairs=25, num_noise=20, use_entangling=True),
 }
 
 TASKS = ["easy", "medium", "hard"]
+
+
+# ============================================================================
+# Standalone graders (used by graders.py and inference.py)
+# ============================================================================
+
+from quantum_openenv_env.server.graders import grade_easy as _grade_easy_fn
+from quantum_openenv_env.server.graders import grade_medium as _grade_medium_fn
+from quantum_openenv_env.server.graders import grade_hard as _grade_hard_fn
+
+GRADERS = {
+    "easy":   _grade_easy_fn,
+    "medium": _grade_medium_fn,
+    "hard":   _grade_hard_fn,
+}
 
 
 # ============================================================================
@@ -98,6 +96,19 @@ TASKS = ["easy", "medium", "hard"]
 # ============================================================================
 
 class QuantumCircuitOptimizationEnvironment(Environment):
+    """
+    Quantum Circuit Optimization RL Environment.
+
+    The agent acts as a quantum compiler, reducing circuit depth by applying
+    mathematical identities and commutativity rules across 3 difficulty tiers.
+
+    Action types:
+        1 - Cancel identical self-inverse gate pairs
+        2 - Swap adjacent commuting gates (different qubits)
+        3 - Replace H-X-H sequence with Z gate
+        4 - Replace CNOT-SWAP sequence with CZ gate
+    """
+
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
     SELF_INVERSE_GATES = {"H", "X", "Y", "Z", "CNOT", "CX", "CZ", "SWAP", "CCX", "TOFFOLI", "CSWAP", "FREDKIN"}
 
@@ -105,30 +116,27 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         self.mode = task
         if self.mode != "random" and self.mode not in TASK_CONFIGS:
             raise ValueError(f"Unknown task: {task}. Must be 'random' or one of {list(TASK_CONFIGS.keys())}")
-        
+
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._reset_count = 0
         self.current_seed = seed
         self.rng = random.Random(self.current_seed) if self.current_seed is not None else random.Random()
-        
+
         self.task_name = "easy"
         self.task_config = TASK_CONFIGS["easy"]
-        self._circuit = []
+        self._circuit: list[QuantumGate] = []
         self._initial_gate_count = 0
 
-    def reset(self, seed: int = None) -> QuantumObservation:
+    def reset(self) -> QuantumObservation:
+        """Reset the environment to a fresh circuit for the configured task."""
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._reset_count += 1
-        
-        if seed is not None:
-            self.current_seed = seed
-            self.rng = random.Random(self.current_seed)
-        
+
         if self.mode == "random":
-            self.task_name = self.rng.choice(list(TASK_CONFIGS.keys()))
+            self.task_name = self.rng.choice(TASKS)
         else:
             self.task_name = self.mode
-            
+
         self.task_config = TASK_CONFIGS[self.task_name]
         self._circuit = self.task_config.generate_circuit(self.rng)
         self._initial_gate_count = len(self._circuit)
@@ -140,19 +148,20 @@ class QuantumCircuitOptimizationEnvironment(Environment):
             done=False,
             reward=0.0,
             metadata={
-                "task": self.task_name, 
+                "task": self.task_name,
                 "reset_count": self._reset_count,
                 "initial_count": self._initial_gate_count,
-                "seed": self.current_seed
+                "seed": self.current_seed,
             },
         )
 
     def step(self, action: QuantumAction) -> QuantumObservation:  # type: ignore[override]
+        """Execute one action in the environment."""
         self._state.step_count += 1
         target_index = action.target_index
         action_type = action.action_type
-        
-        reward = -0.1  
+
+        reward = -0.1
         action_result = "invalid"
 
         if target_index < 0 or target_index >= len(self._circuit):
@@ -161,9 +170,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         gate_at_index = self._circuit[target_index]
         active_qubits = set(gate_at_index.target_qubits)
 
-        # ---------------------------------------------------------
-        # ACTION 1: Cancel Identical Gates
-        # ---------------------------------------------------------
+        # ACTION 1: Cancel Identical Self-Inverse Gates
         if action_type == 1:
             next_gate_index = None
             for j in range(target_index + 1, len(self._circuit)):
@@ -171,59 +178,50 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 if active_qubits.intersection(next_qubits):
                     next_gate_index = j
                     break
-            
+
             if (next_gate_index is not None and
-                self._circuit[next_gate_index].name == gate_at_index.name and
-                self._circuit[next_gate_index].target_qubits == gate_at_index.target_qubits and
-                gate_at_index.name in self.SELF_INVERSE_GATES):
-                
+                    self._circuit[next_gate_index].name == gate_at_index.name and
+                    self._circuit[next_gate_index].target_qubits == gate_at_index.target_qubits and
+                    gate_at_index.name in self.SELF_INVERSE_GATES):
                 self._circuit.pop(next_gate_index)
                 self._circuit.pop(target_index)
                 reward = 1.0
                 action_result = "cancelled_identical"
 
-        # ---------------------------------------------------------
         # ACTION 2: Swap Commuting Gates
-        # ---------------------------------------------------------
         elif action_type == 2:
             if target_index + 1 < len(self._circuit):
                 next_gate = self._circuit[target_index + 1]
                 next_qubits = set(next_gate.target_qubits)
-                
                 if not active_qubits.intersection(next_qubits):
-                    self._circuit[target_index], self._circuit[target_index + 1] = self._circuit[target_index + 1], self._circuit[target_index]
-                    reward = -0.05 
+                    self._circuit[target_index], self._circuit[target_index + 1] = (
+                        self._circuit[target_index + 1],
+                        self._circuit[target_index],
+                    )
+                    reward = -0.05
                     action_result = "swapped_commuting"
 
-        # ---------------------------------------------------------
         # ACTION 3: Replace H-X-H with Z
-        # ---------------------------------------------------------
         elif action_type == 3:
             if target_index + 2 < len(self._circuit):
                 g1 = self._circuit[target_index]
                 g2 = self._circuit[target_index + 1]
                 g3 = self._circuit[target_index + 2]
-                
                 if (g1.name == "H" and g2.name == "X" and g3.name == "H" and
-                    g1.target_qubits == g2.target_qubits == g3.target_qubits):
-                    
+                        g1.target_qubits == g2.target_qubits == g3.target_qubits):
                     self._circuit.pop(target_index + 2)
                     self._circuit.pop(target_index + 1)
                     self._circuit[target_index] = QuantumGate(name="Z", target_qubits=g1.target_qubits)
                     reward = 2.0
                     action_result = "identity_hxh_to_z"
 
-        # ---------------------------------------------------------
         # ACTION 4: Replace CNOT-SWAP with CZ
-        # ---------------------------------------------------------
         elif action_type == 4:
             if target_index + 1 < len(self._circuit):
                 g1 = self._circuit[target_index]
                 g2 = self._circuit[target_index + 1]
-                
-                if (g1.name == "CNOT" and g2.name == "SWAP" and 
-                    set(g1.target_qubits) == set(g2.target_qubits)):
-                    
+                if (g1.name == "CNOT" and g2.name == "SWAP" and
+                        set(g1.target_qubits) == set(g2.target_qubits)):
                     self._circuit.pop(target_index + 1)
                     self._circuit[target_index] = QuantumGate(name="CZ", target_qubits=g1.target_qubits)
                     reward = 1.0
@@ -231,18 +229,51 @@ class QuantumCircuitOptimizationEnvironment(Environment):
 
         return self._build_observation(reward, action_result)
 
-    # Grader methods for OpenEnv validation
-    def grade_easy(self, observation: QuantumObservation) -> float:
-        """Grader for Easy Task."""
-        return grade_easy(observation)
+    # ============================================================================
+    # Grader Methods (OpenEnv validator calls these on the environment instance)
+    # Each grades the CURRENT internal circuit state — no arguments needed.
+    # ============================================================================
 
-    def grade_medium(self, observation: QuantumObservation) -> float:
-        """Grader for Medium Task."""
-        return grade_medium(observation)
+    def grade_easy(self) -> float:
+        """
+        Grader for Easy Task.
+        Pure compression ratio — any reduction in gate count earns proportional score.
+        """
+        if self._initial_gate_count == 0:
+            return 1.0
+        final_count = len(self._circuit)
+        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
+        return max(0.0, min(1.0, compression))
 
-    def grade_hard(self, observation: QuantumObservation) -> float:
-        """Grader for Hard Task."""
-        return grade_hard(observation)
+    def grade_medium(self) -> float:
+        """
+        Grader for Medium Task.
+        Scaled so that 20% compression = full score (1.0).
+        Partial credit below threshold encourages progress.
+        """
+        if self._initial_gate_count == 0:
+            return 1.0
+        final_count = len(self._circuit)
+        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
+        scaled = compression / 0.20
+        return max(0.0, min(1.0, scaled))
+
+    def grade_hard(self) -> float:
+        """
+        Grader for Hard Task.
+        Scaled so that 35% compression = full score (1.0).
+        Harder threshold reflects genuine difficulty of deep entangled circuits.
+        """
+        if self._initial_gate_count == 0:
+            return 1.0
+        final_count = len(self._circuit)
+        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
+        scaled = compression / 0.35
+        return max(0.0, min(1.0, scaled))
+
+    # ============================================================================
+    # Internal helpers
+    # ============================================================================
 
     def _build_observation(self, reward: float, action_result: str) -> QuantumObservation:
         max_steps_reached = self._state.step_count >= 150
@@ -259,46 +290,42 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 "action_result": action_result,
                 "step": self._state.step_count,
                 "initial_count": self._initial_gate_count,
-                "seed": self.current_seed
+                "seed": self.current_seed,
             },
         )
 
     def _is_circuit_dead_end(self) -> bool:
-        # 1. If the circuit is fully optimized to 0, the episode is done (Victory!)
         if len(self._circuit) == 0:
             return True
-            
-        # 2. Check if a simple cancellation is immediately available
+
         for i in range(len(self._circuit)):
             curr_gate = self._circuit[i]
             active_qubits = set(curr_gate.target_qubits)
-            
             for j in range(i + 1, len(self._circuit)):
                 next_qubits = set(self._circuit[j].target_qubits)
                 if active_qubits.intersection(next_qubits):
                     next_gate = self._circuit[j]
                     if (next_gate.name == curr_gate.name and
-                        next_gate.target_qubits == curr_gate.target_qubits and
-                        curr_gate.name in self.SELF_INVERSE_GATES):
-                        return False # A valid cancellation exists
-                    break 
-                    
-        # 3. Check if ANY valid swap is possible. If they can swap, it's not a dead end.
+                            next_gate.target_qubits == curr_gate.target_qubits and
+                            curr_gate.name in self.SELF_INVERSE_GATES):
+                        return False
+                    break
+
         for i in range(len(self._circuit) - 1):
-            if not set(self._circuit[i].target_qubits).intersection(set(self._circuit[i+1].target_qubits)):
-                return False # A valid swap exists, agent might be building an identity
-                
-        # If no cancellations and no swaps are possible, it truly is a dead end.
+            if not set(self._circuit[i].target_qubits).intersection(
+                    set(self._circuit[i + 1].target_qubits)):
+                return False
+
         return True
 
     def grade(self) -> float:
-        grader = GRADERS[self.task_name]
-        return grader(QuantumObservation(
-            circuit=self._circuit,
-            gate_count=len(self._circuit),
-            num_qubits=self.task_config.num_qubits,
-            metadata={"initial_count": self._initial_gate_count}
-        ))
+        """Grade current state using the active task's grader."""
+        grader_method = {
+            "easy": self.grade_easy,
+            "medium": self.grade_medium,
+            "hard": self.grade_hard,
+        }[self.task_name]
+        return grader_method()
 
     @property
     def state(self) -> State:

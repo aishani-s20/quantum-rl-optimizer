@@ -5,18 +5,24 @@ entrypoint: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumC
 tasks:
   - id: "easy"
     name: "Easy Circuit Optimization"
-    description: "2 qubits, single-qubit gates only."
+    description: "2 qubits, ~20 single-qubit gates. Agent must identify and cancel self-inverse gate pairs."
     difficulty: "easy"
-    grader: "quantum_openenv_env.server.graders:grade_easy"
-    
+    config:
+      task: "easy"
+    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment.grade_easy"
+
   - id: "medium"
     name: "Medium Circuit Optimization"
-    description: "4 qubits with basic CNOT/SWAP entanglement."
+    description: "4 qubits, ~30 gates with CNOT/SWAP entanglement. Requires swapping to unblock cancellations."
     difficulty: "medium"
-    grader: "quantum_openenv_env.server.graders:grade_medium"
-    
+    config:
+      task: "medium"
+    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment.grade_medium"
+
   - id: "hard"
     name: "Hard Circuit Optimization"
-    description: "6 qubits with deep entanglement and complex blockades."
+    description: "6 qubits, ~70 gates with deep entanglement. Demands long-horizon spatial reasoning."
     difficulty: "hard"
-    grader: "quantum_openenv_env.server.graders:grade_hard"
+    config:
+      task: "hard"
+    grader: "quantum_openenv_env.server.quantum_openenv_env_environment:QuantumCircuitOptimizationEnvironment.grade_hard"
