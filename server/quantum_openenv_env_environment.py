@@ -10,15 +10,11 @@ Quantum Circuit Optimization Environment Implementation.
 Architecture:
 - Dynamically generated circuits across 3 difficulty tiers to challenge frontier models.
 - Instance-isolated PRNG (seeding) for strict reproducibility in server environments.
-- Relative Compression Grading: Evaluates agents on compression ratio rather than
-  an absolute theoretical minimum, mirroring real-world NP-Hard quantum optimization constraints.
+- Relative Compression Grading: grading math lives exclusively in graders.py.
+  The class methods grade_easy / grade_medium / grade_hard are thin delegates
+  that call graders.py — there is no duplicated math here.
 - Advanced action tracking: medium grader rewards agents that discover
   algebraic identities (H-X-H=Z, CNOT-SWAP=CZ) beyond simple cancellations.
-
-GRADER SYNC NOTE:
-  The class methods grade_easy / grade_medium / grade_hard below must always
-  stay in sync with the standalone functions in graders.py. Both are called
-  by different parts of the platform. Any change to one must be made to both.
 """
 
 import os
@@ -29,6 +25,9 @@ from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import EnvironmentMetadata, State
 
 from quantum_openenv_env.models import QuantumAction, QuantumGate, QuantumObservation
+
+# Grading math lives here and ONLY here — environment methods delegate to these
+from quantum_openenv_env.server.graders import grade_easy, grade_medium, grade_hard
 
 
 # ============================================================================
@@ -83,13 +82,6 @@ TASK_CONFIGS = {
 
 TASKS = ["easy", "medium", "hard"]
 
-
-# ============================================================================
-# Graders (imported from graders.py)
-# ============================================================================
-
-from quantum_openenv_env.server.graders import grade_easy, grade_medium, grade_hard
-
 GRADERS = {
     "easy":   grade_easy,
     "medium": grade_medium,
@@ -132,7 +124,6 @@ class QuantumCircuitOptimizationEnvironment(Environment):
     }
 
     def __init__(self, task: str = "random", seed: int = None):
-        # Read from Docker env_var if task not explicitly set
         if task == "random":
             task = os.getenv("QUANTUM_TASK", "random")
 
@@ -293,55 +284,39 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         )
 
     # ============================================================================
-    # Grader methods — MUST stay in sync with graders.py standalone functions
+    # Grader methods — thin delegates to graders.py (single source of truth)
+    # No math here. Change grader logic only in graders.py.
     # ============================================================================
 
-    @staticmethod
-    def _strict(score: float) -> float:
-        """Clamp to strictly (0.0, 1.0) — platform rejects exactly 0.0 or 1.0."""
-        return max(0.01, min(0.99, float(score)))
+    def _make_grader_obs(self) -> QuantumObservation:
+        """
+        Build a minimal observation for grader calls.
+        No side effects — does not trigger dead-end check or prompt generation.
+        Only carries the fields that graders.py actually reads from metadata.
+        """
+        return QuantumObservation(
+            circuit=self._circuit,
+            gate_count=len(self._circuit),
+            num_qubits=self.task_config.num_qubits,
+            metadata={
+                "initial_count": self._initial_gate_count,
+                "step": self._state.step_count,
+                "used_advanced_actions": self._used_advanced_actions,
+            },
+        )
 
     def grade_easy(self) -> float:
-        """Pure compression ratio — any gate removal earns proportional credit."""
-        if self._initial_gate_count == 0:
-            return self._strict(0.5)
-        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
-        return self._strict(compression)
+        return grade_easy(self._make_grader_obs())
 
     def grade_medium(self) -> float:
-        """Compression ratio + 0.15 bonus for using advanced identity actions."""
-        if self._initial_gate_count == 0:
-            return self._strict(0.5)
-        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
-        bonus = 0.15 if self._used_advanced_actions else 0.0
-        return self._strict(compression + bonus)
+        return grade_medium(self._make_grader_obs())
 
     def grade_hard(self) -> float:
-        """
-        Strict compression ratio only. No step-efficiency bonus.
-
-        Must achieve >= 5% compression to score above the minimum.
-        Ensures hard is always genuinely harder than medium:
-        - No artificial inflation from step efficiency
-        - Random lucky cancellations (< 5%) score the minimum (0.01)
-        - Only sustained, meaningful compression earns a real score
-
-        SYNC: Keep identical to grade_hard() in graders.py.
-        """
-        if self._initial_gate_count == 0:
-            return self._strict(0.5)
-        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
-        if compression < 0.05:
-            return self._strict(0.01)
-        return self._strict(compression)
+        return grade_hard(self._make_grader_obs())
 
     def grade(self) -> float:
-        """Grade current state using the active task's grader method."""
-        return {
-            "easy":   self.grade_easy,
-            "medium": self.grade_medium,
-            "hard":   self.grade_hard,
-        }[self.task_name]()
+        """Grade current state using the active task's grader."""
+        return GRADERS[self.task_name](self._make_grader_obs())
 
     # ============================================================================
     # Internal helpers
