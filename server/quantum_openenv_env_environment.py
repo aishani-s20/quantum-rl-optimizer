@@ -71,6 +71,16 @@ class TaskConfig:
             insert_idx_2 = rng.randint(insert_idx_1, len(circuit))
             circuit.insert(insert_idx_2, gate2)
 
+        if self.use_entangling and self.num_qubits > 1:
+            num_patterns = 1 if self.name == "medium" else 2  # hard gets 2
+            for _ in range(num_patterns):
+                if rng.random() > 0.3:  # 70% chance per pattern, keeps it non-deterministic
+                    q1, q2 = rng.sample(range(self.num_qubits), 2)
+                    insert_at = rng.randint(0, len(circuit))
+                    circuit.insert(insert_at,     QuantumGate(name="CNOT", target_qubits=[q1, q2]))
+                    circuit.insert(insert_at + 1, QuantumGate(name="CNOT", target_qubits=[q2, q1]))
+                    circuit.insert(insert_at + 2, QuantumGate(name="CNOT", target_qubits=[q1, q2]))
+
         return circuit
 
 
@@ -247,20 +257,26 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                     action_result = "identity_hxh_to_z"
                     self._used_advanced_actions = True
 
-        # ACTION 4: Replace CNOT-SWAP with CZ  (advanced identity)
+        # ACTION 4: Replace CNOT(a,b)→CNOT(b,a)→CNOT(a,b) with SWAP  (advanced identity)
         elif action_type == 4:
-            if target_index + 1 < len(self._circuit):
+            if target_index + 2 < len(self._circuit):
                 g1 = self._circuit[target_index]
                 g2 = self._circuit[target_index + 1]
+                g3 = self._circuit[target_index + 2]
 
-                if (g1.name == "CNOT" and g2.name == "SWAP" and
-                        set(g1.target_qubits) == set(g2.target_qubits)):
+                qubits_ab = g1.target_qubits  # e.g. [0, 1]
+                qubits_ba = list(reversed(g1.target_qubits))  # e.g. [1, 0]
+
+                if (g1.name == "CNOT" and g2.name == "CNOT" and g3.name == "CNOT" and
+                        g1.target_qubits == g3.target_qubits and
+                        g2.target_qubits == qubits_ba):
+                    self._circuit.pop(target_index + 2)
                     self._circuit.pop(target_index + 1)
                     self._circuit[target_index] = QuantumGate(
-                        name="CZ", target_qubits=g1.target_qubits
+                        name="SWAP", target_qubits=g1.target_qubits
                     )
-                    reward = 1.0
-                    action_result = "identity_cnot_swap_to_cz"
+                    reward = 2.0  # saves 2 gates, same as H-X-H identity
+                    action_result = "identity_3cnot_to_swap"
                     self._used_advanced_actions = True
 
         return self._build_observation(reward, action_result)
@@ -377,7 +393,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
             "1: Cancel identical self-inverse gates (H, X, Y, Z, CNOT, SWAP).\n\n"
             "2: Swap adjacent commuting gates (gates not sharing qubits).\n\n"
             "3: Replace an H-X-H sequence with a Z gate.\n\n"
-            "4: Replace a CNOT-SWAP sequence with a CZ gate.\n\n"
+            "4: Replace CNOT(a,b)→CNOT(b,a)→CNOT(a,b) with a single SWAP gate.\n\n"
             "CURRENT CIRCUIT STATE:\n\n"
         )
 

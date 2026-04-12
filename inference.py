@@ -79,7 +79,7 @@ SYSTEM_PROMPT = textwrap.dedent(
               the same qubits, not blocked by intermediate gates sharing those qubits.
     Action 2: Swap adjacent commuting gates (gates on entirely non-overlapping qubits).
     Action 3: Replace an H-X-H sequence on the same qubit with a Z gate.
-    Action 4: Replace a CNOT-SWAP sequence on the same qubits with a CZ gate.
+    Action 4: Replace a CNOT(a,b)→CNOT(b,a)→CNOT(a,b) sequence with a single SWAP gate (3 alternating CNOTs collapse to 1 SWAP).
 
     You MUST output ONLY a valid JSON object with exactly two keys:
       "target_index" (integer) and "action_type" (integer 1-4).

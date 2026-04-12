@@ -41,7 +41,7 @@ class QuantumAction(Action):
         default=1, 
         ge=1, # Minimum action type is 1
         le=4, # Maximum action type is 4
-        description="1: Cancel identical gates, 2: Swap commuting gates, 3: Replace H-X-H with Z, 4: Replace CNOT-SWAP with CZ"
+        description="1: Cancel identical gates, 2: Swap commuting gates, 3: Replace H-X-H with Z, 4: Replace 3-CNOT sequence with SWAP"
     )
 
 

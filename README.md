@@ -74,7 +74,7 @@ Current LLM benchmarks rely on static toy puzzles. This environment bridges the 
 | `1` | **Cancel Identical Gates** | Removes self-inverse gate pairs (X·X=I, H·H=I, CNOT·CNOT=I) on the same qubits, not blocked by overlapping intermediate gates. | `+1.0` |
 | `2` | **Swap Commuting Gates** | Swaps the target gate with the next adjacent gate **only if** their qubit sets do not intersect. Enables bringing distant cancellable pairs together. | `-0.05` |
 | `3` | **H-X-H Identity Collapse** | Replaces a `H → X → H` sequence on the same qubit with a single `Z` gate (net: 2 gates removed). | `+2.0` |
-| `4` | **Entanglement Compression** | Replaces an adjacent `CNOT → SWAP` on the same qubits with a single `CZ` gate (net: 1 gate removed). | `+1.0` |
+| `4` | **Entanglement Compression** | Replaces a `CNOT(a,b) → CNOT(b,a) → CNOT(a,b)` sequence with a single `SWAP` gate — a standard compiler identity (net: 2 gates removed). | `+2.0` |
 
 > **Invalid actions** (out-of-bounds index, illegal non-commuting swap, pattern not present) incur a `-0.10` penalty. Circuit state remains unchanged.
 
