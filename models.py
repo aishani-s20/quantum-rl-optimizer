@@ -72,6 +72,10 @@ class QuantumObservation(Observation):
         default=0.0,
         description="The reward achieved on the last step"
     )
+    prompt: str = Field(
+        default="",
+        description="Human-readable game rules and current circuit state for the UI playground."
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional episode metadata (e.g., initial gate count, seed)"

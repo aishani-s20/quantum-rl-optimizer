@@ -65,6 +65,7 @@ class QuantumOpenenvEnv(
             num_qubits=obs_data.get("num_qubits", 0),
             done=obs_data.get("done", False),
             reward=obs_data.get("reward", 0.0),
+            prompt=obs_data.get("prompt", ""),
             metadata=obs_data.get("metadata", {}),
         )
 

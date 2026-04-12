@@ -176,6 +176,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
             num_qubits=self.task_config.num_qubits,
             done=False,
             reward=0.0,
+            prompt=self._generate_prompt(),
             metadata={
                 "task": self.task_name,
                 "reset_count": self._reset_count,
@@ -349,6 +350,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
             num_qubits=self.task_config.num_qubits,
             done=is_done,
             reward=reward,
+            prompt=self._generate_prompt(),
             metadata={
                 "task": self.task_name,
                 "action_result": action_result,
@@ -384,3 +386,32 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 return False
 
         return True
+    
+    def _generate_prompt(self) -> str:
+        """Generates a human-readable prompt for the Web UI."""
+        prompt_text = (
+            f"Quantum Circuit Optimizer ({self.task_name.upper()})\n"
+            f"A quantum circuit on {self.task_config.num_qubits} qubits has been generated. "
+            "Your goal is to compress it by finding logical reductions.\n"
+            "ACTIONS:\n"
+            "1: Cancel identical self-inverse gates (H, X, Y, Z, CNOT, SWAP).\n"
+            "2: Swap adjacent commuting gates (gates not sharing qubits).\n"
+            "3: Replace an H-X-H sequence with a Z gate.\n"
+            "4: Replace a CNOT-SWAP sequence with a CZ gate.\n"
+            "CURRENT CIRCUIT STATE:\n"
+        )
+        
+        if not self._circuit:
+            prompt_text += "[Empty Circuit - Optimization Complete!]"
+        else:
+            # Build a compact, single-line representation
+            gate_strings = []
+            for i, gate in enumerate(self._circuit):
+                # Extract qubits as a clean string (e.g., "0" or "0,1")
+                qubits = ",".join(str(q) for q in gate.target_qubits)
+                # Format: [Index]Gate(Qubit) -> e.g., [0]X(0)
+                gate_strings.append(f"[{i}]{gate.name}({qubits})")
+                
+            prompt_text += " ".join(gate_strings)
+            
+        return prompt_text
