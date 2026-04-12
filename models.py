@@ -32,15 +32,15 @@ class QuantumGate(BaseModel):
 
 
 class QuantumAction(Action):
-    """
-    Action for the Quantum Circuit Optimization environment.
-    
-    The agent selects an index in the quantum circuit and an action type to perform.
-    """
-
-    target_index: int = Field(..., description="Index in the circuit to attempt the action")
+    target_index: int = Field(
+        ..., 
+        ge=0, # Prevents negative numbers in the UI
+        description="Index in the circuit to attempt the action"
+    )
     action_type: int = Field(
         default=1, 
+        ge=1, # Minimum action type is 1
+        le=4, # Maximum action type is 4
         description="1: Cancel identical gates, 2: Swap commuting gates, 3: Replace H-X-H with Z, 4: Replace CNOT-SWAP with CZ"
     )
 

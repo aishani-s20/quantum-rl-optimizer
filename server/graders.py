@@ -9,14 +9,18 @@ Each grader measures a different skill matching its difficulty tier:
   Easy:   Pure compression ratio. Any gate removal earns proportional credit.
 
   Medium: Compression + 0.15 bonus for using advanced identity actions (3 or 4).
-          Rewards agents that discover algebraic identities, not just cancellations.
+          Rewards agents that discover algebraic identities beyond simple cancellations.
 
-  Hard:   Weighted blend of compression (70%) and step efficiency (30%).
-          Step efficiency ONLY contributes if compression >= 5% — this prevents
-          a zero-compression episode from scoring well just from low step count.
-          Penalises thrashing (many invalid actions before finding cancellations).
+  Hard:   Strict compression ratio with a 5% minimum threshold.
+          No step-efficiency bonus — only raw gate reduction counts.
+          An agent that removes nothing scores the minimum (0.01).
+          This ensures hard is always harder than medium to pass.
 
 All scores clamped strictly to (0.01, 0.99) — platform rejects exactly 0.0 or 1.0.
+
+NOTE: The class methods grade_easy / grade_medium / grade_hard in
+      quantum_openenv_env_environment.py must be kept in sync with these
+      standalone functions. Both are called by different parts of the platform.
 """
 
 
@@ -45,8 +49,8 @@ def grade_easy(observation) -> float:
 def grade_medium(observation) -> float:
     """
     Medium grader: compression + bonus for advanced identity usage.
-    Score = compression_ratio + 0.15 if agent used action 3 or 4, else compression_ratio.
-    Rewards discovering H-X-H=Z or CNOT-SWAP=CZ identities beyond simple cancellation.
+    Score = compression + 0.15 if agent used action 3 or 4, else compression.
+    Rewards discovering H-X-H=Z or CNOT-SWAP=CZ beyond simple cancellation.
     """
     metadata = getattr(observation, 'metadata', {}) or {}
     final_count = getattr(observation, 'gate_count', 0)
@@ -64,34 +68,33 @@ def grade_medium(observation) -> float:
 
 def grade_hard(observation) -> float:
     """
-    Hard grader: weighted blend of compression and step efficiency.
+    Hard grader: strict compression ratio only.
 
-    Score = 0.7 * compression + 0.3 * step_efficiency
-    where step_efficiency = 1 - (steps_taken / max_steps)
+    No step-efficiency bonus. Only absolute gate reduction matters.
 
-    IMPORTANT: step_efficiency only contributes when compression >= 5%.
-    Without this gate, an agent making zero progress still scores ~0.20
-    from step efficiency alone — which incorrectly makes hard easier than medium.
+    The 5% minimum threshold means an agent must remove at least 5% of
+    gates to score above the minimum. Agents that thrash with invalid
+    actions and get lucky with 1-2 cancellations near the end score
+    only their raw compression — no artificial inflation.
 
-    This directly penalises the behaviour frontier models exhibit most:
-    thrashing through invalid actions, exhausting the step budget without progress.
+    Why not use step-efficiency here:
+      A 6-qubit ~70-gate circuit is hard enough that even finding 5%
+      compression is meaningful. Adding step efficiency would reward
+      agents that do nothing (low step count) over agents that try but
+      fail — which is backwards. Pure compression is the honest metric.
     """
     metadata = getattr(observation, 'metadata', {}) or {}
     final_count = getattr(observation, 'gate_count', 0)
     initial_count = metadata.get("initial_count", final_count)
-    steps_taken = metadata.get("step", 1)
-    max_steps = 150
 
     if initial_count == 0:
         return _strict(0.5)
 
     compression = (initial_count - final_count) / initial_count
 
-    # Step efficiency only rewards efficient agents that actually compressed the circuit.
-    # An agent that does nothing should not score well just because it used few steps.
+    # Hard minimum: must achieve at least 5% compression to score above floor.
+    # This prevents lucky 1-cancellation runs from passing the threshold.
     if compression < 0.05:
-        return _strict(compression)
+        return _strict(0.01)
 
-    step_efficiency = max(0.0, 1.0 - (steps_taken / max_steps))
-    score = 0.7 * compression + 0.3 * step_efficiency
-    return _strict(score)
+    return _strict(compression)

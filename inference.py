@@ -48,7 +48,7 @@ API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME   = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 BENCHMARK    = os.getenv("QUANTUM_BENCHMARK", "quantum_optimization")
 
-MAX_STEPS  = 50
+MAX_STEPS  = 15
 MAX_TOKENS = 150
 SUCCESS_SCORE_THRESHOLD = 0.10
 
@@ -56,7 +56,7 @@ SUCCESS_SCORE_THRESHOLD = 0.10
 # TEMPERATURE = 0.0: greedy decoding makes the LLM deterministic.
 # For a truly non-deterministic model (temperature > 0), increase NUM_RUNS
 # and report the average — that is statistically stable even if single runs vary.
-TEMPERATURE = 0.0
+TEMPERATURE = 0.7
 NUM_RUNS    = 3   # episodes per task; average is reported in summary
 
 ALL_TASKS  = ["easy", "medium", "hard"]
@@ -306,7 +306,7 @@ async def main() -> None:
     print(f"\n{'='*60}", flush=True)
     print("  BASELINE RESULTS SUMMARY", flush=True)
     print(f"  Model       : {MODEL_NAME}", flush=True)
-    print(f"  Temperature : {TEMPERATURE}  (0.0 = greedy/deterministic)", flush=True)
+    print(f"  Temperature : {TEMPERATURE}", flush=True)
     print(f"  Runs/task   : {NUM_RUNS}", flush=True)
     print(f"  Seeds       : easy={TASK_SEEDS['easy']}  "
           f"medium={TASK_SEEDS['medium']}  hard={TASK_SEEDS['hard']}", flush=True)
