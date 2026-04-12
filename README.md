@@ -11,11 +11,11 @@ pinned: false
 # 🌌 Quantum Circuit Optimization Environment
 
 > **An advanced, physics-grounded Reinforcement Learning environment for the Meta OpenEnv Hackathon.**  
-> Challenge agents to act as quantum compilers — optimizing multi-qubit circuits through mathematical identities and commutativity rules.
+> Challenge agents to optimize multi-qubit quantum circuits through mathematical identities and commutativity rules.
 
 ---
 
-## 🏆 Key Features
+## Key Features
 
 - **NP-Hard Problem Space:** Moves beyond static text puzzles into multi-dimensional spatial reasoning that cannot be solved by memorization.
 - **Deterministic Reproducibility:** Fully supports episode seeding via `random.Random(seed)`. The same seed always produces the same circuit, guaranteeing reproducible evaluation across model runs.
@@ -24,23 +24,23 @@ pinned: false
 
 ---
 
-## 🚀 Motivation: The Quantum Compiler Challenge
+## Motivation: The Quantum Circuit Optimization
 
-In the real world, quantum computers suffer from rapid **decoherence**. Every quantum gate introduces noise, so shorter circuits yield higher-fidelity results. However, optimal quantum circuit compression is an **NP-Hard problem** — the same complexity class as the Travelling Salesman Problem.
+In the real world, quantum computers suffer from rapid **decoherence**. Every quantum gate introduces noise, so shorter circuits yield higher-fidelity results. However, optimal quantum circuit compression is an **NP-Hard problem**.
 
-Tools like **Qiskit, Cirq, and tket** all ship transpiler passes that do exactly what this environment models: identify redundant gates, exploit commutativity to reorder gates, and apply algebraic identities to collapse gate sequences. This environment lets RL and LLM agents learn those same compiler heuristics from scratch.
+While traditional frameworks like **Qiskit, Cirq, and tket** rely on hardcoded human heuristics to identify redundant gates and exploit commutativity, this environment turns that exact physics problem into a rigorous testing ground for Artificial Intelligence. It is designed to evaluate whether RL and LLM agents can independently learn and execute these compiler heuristics from scratch.
 
 Current LLM benchmarks rely on static toy puzzles. This environment bridges the gap by requiring agents to generalize real-world quantum physics rules — such as swapping spatially separated, commuting gates to bring distant self-inverse identities together. **Memorization is impossible**; agents must dynamically reason about multi-dimensional spatial gate layouts and plan over long horizons.
 
 ---
 
-## 🛠️ Environment Specifications
+## Environment Specifications
 
-### 👁️ Observation Space
+### Observation Space
 
 | Field | Type | Description |
 |---|---|---|
-| `circuit` | `List[Gate]` | Current gate sequence. Each gate has a `name` (e.g. `"H"`, `"CNOT"`) and `target_qubits`. |
+| `circuit` | `List[Gate]` | Current gate sequence. Each gate has a `name` (e.g. `"H"`, `"CNOT"`, `"SWAP"`) and `target_qubits`. |
 | `gate_count` | `int` | Current number of gates remaining in the circuit. |
 | `num_qubits` | `int` | Total number of qubits in the system. |
 | `done` | `bool` | `True` when fully optimized, dead-ended, or step limit (150) reached. |
@@ -56,15 +56,15 @@ Current LLM benchmarks rely on static toy puzzles. This environment bridges the 
 | `initial_count` | `int` | Gate count at episode start. Used by all graders to compute compression ratio. |
 | `step` | `int` | Current step number within the episode. |
 | `seed` | `int \| None` | RNG seed used to generate this circuit. Pass the same value to `reset()` to reproduce it. |
-| `used_advanced_actions` | `bool` | `True` if the agent used action 3 (H-X-H→Z) or action 4 (CNOT-SWAP→CZ) this episode. Used by the medium grader bonus. |
+| `used_advanced_actions` | `bool` | `True` if the agent used action 3 (H-X-H → Z) or action 4 (CNOT-SWAP → CZ) this episode. Used by the medium grader bonus. |
 
 ---
 
-### 🎮 Action Space
+### Action Space
 
 | Field | Type | Description |
 |---|---|---|
-| `target_index` | `int ≥ 0` | Index of the primary gate to act on. Validated: must be non-negative. |
+| `target_index` | `int ≥ 0 & < num_qubits` | Index of the primary gate to act on. Validated: must be non-negative. |
 | `action_type` | `int [1–4]` | Quantum physics rule to apply. Validated: must be between 1 and 4 inclusive. |
 
 #### Available Action Types
@@ -80,7 +80,7 @@ Current LLM benchmarks rely on static toy puzzles. This environment bridges the 
 
 ---
 
-## 📊 Tasks & Difficulty Levels
+## Tasks & Difficulty Levels
 
 | Task | Qubits | Pair Gates | Noise Gates | Approx. Initial Gates | Entanglement |
 |---|---|---|---|---|---|
@@ -92,7 +92,7 @@ Set `QUANTUM_TASK=random` to have the environment randomly select a difficulty t
 
 ---
 
-## 🏆 Grader & Evaluation
+## Grader & Evaluation
 
 Grading math lives exclusively in `server/graders.py`. The environment class methods `grade_easy`, `grade_medium`, `grade_hard` are thin one-line delegates — no duplicated math anywhere. All scores are strictly within `(0.01, 0.99)`.
 
@@ -107,7 +107,7 @@ Testing showed a step-efficiency formula inflated hard scores above medium — a
 
 ---
 
-## 📈 Baseline Scores
+## Baseline Scores
 
 All runs use fixed seeds so the starting circuit is identical across evaluations. Temperature 0.7 reflects real-world model behavior. The variance across 3 runs shows statistical stability of the difficulty progression.
 
@@ -126,13 +126,13 @@ All runs use fixed seeds so the starting circuit is identical across evaluations
 
 | Task | Avg Score | Min | Max | Result | Notes |
 |---|---|---|---|---|---|
-| `easy` | **0.167** | 0.100 | 0.200 | ✅ Pass | Model reliably finds local self-inverse cancellations on the 2-qubit circuit. |
-| `medium` | **0.028** | 0.010 | 0.062 | ❌ Fail | Struggles with blocker gates; rarely discovers H-X-H or CNOT-SWAP identities needed for the bonus. |
-| `hard` | **0.010** | 0.010 | 0.010 | ❌ Fail | Consistently scores the floor — cannot achieve 5% compression on the 70-gate 6-qubit circuit in 15 steps. |
+| `easy` | **0.167** | 0.100 | 0.200 | Pass | Model reliably finds local self-inverse cancellations on the 2-qubit circuit. |
+| `medium` | **0.028** | 0.010 | 0.062 | Fail | Struggles with blocker gates; rarely discovers H-X-H or CNOT-SWAP identities needed for the bonus. |
+| `hard` | **0.010** | 0.010 | 0.010 | Fail | Consistently scores the floor — cannot achieve 5% compression on the 70-gate 6-qubit circuit in 15 steps. |
 
-**Interpretation:** The difficulty progression is correct. Easy is solvable zero-shot. Medium requires identity discovery which small models rarely attempt. Hard requires sustained multi-step planning that is beyond current zero-shot LLM capability within a limited step budget. Advanced scaffolding (ReAct, Tree-of-Thought) or RL fine-tuning is required for reliable medium/hard performance.
+**Interpretation:** The difficulty progression is correct. Easy is solvable zero-shot. Medium requires identity discovery which small models rarely attempt. Hard requires sustained multi-step planning that is beyond current zero-shot LLM capability within a limited step budget. Advanced scaffolding or RL fine-tuning is required for reliable medium/hard performance.
 
-To reproduce these exact results:
+To reproduce these results:
 
 ```bash
 # Set in your .env:
@@ -146,7 +146,7 @@ uv run python inference.py
 
 ---
 
-## 💻 Setup and Usage Instructions
+## Setup and Usage Instructions
 
 ### 1. Prerequisites
 
@@ -207,7 +207,7 @@ The environment uses `random.Random(seed)` per instance — fully isolated, safe
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 .
@@ -228,6 +228,6 @@ The environment uses `random.Random(seed)` per instance — fully isolated, safe
 
 ---
 
-## 📄 License
+## License
 
 This project is released under the MIT license found in the `LICENSE` file.
