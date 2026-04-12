@@ -12,13 +12,16 @@ Architecture:
 - Instance-isolated PRNG (seeding) for strict reproducibility in server environments.
 - Relative Compression Grading: Evaluates agents on compression ratio rather than
   an absolute theoretical minimum, mirroring real-world NP-Hard quantum optimization constraints.
+- Advanced action tracking: medium/hard graders reward agents that discover
+  algebraic identities (H-X-H=Z, CNOT-SWAP=CZ) beyond simple cancellations.
 """
 
+import os
 import random
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
-from openenv.core.env_server.types import State
+from openenv.core.env_server.types import EnvironmentMetadata, State
 
 from quantum_openenv_env.models import QuantumAction, QuantumGate, QuantumObservation
 
@@ -77,17 +80,15 @@ TASKS = ["easy", "medium", "hard"]
 
 
 # ============================================================================
-# Standalone graders (used by graders.py and inference.py)
+# Graders (imported from graders.py)
 # ============================================================================
 
-from quantum_openenv_env.server.graders import grade_easy as _grade_easy_fn
-from quantum_openenv_env.server.graders import grade_medium as _grade_medium_fn
-from quantum_openenv_env.server.graders import grade_hard as _grade_hard_fn
+from quantum_openenv_env.server.graders import grade_easy, grade_medium, grade_hard
 
 GRADERS = {
-    "easy":   _grade_easy_fn,
-    "medium": _grade_medium_fn,
-    "hard":   _grade_hard_fn,
+    "easy":   grade_easy,
+    "medium": grade_medium,
+    "hard":   grade_hard,
 }
 
 
@@ -102,20 +103,38 @@ class QuantumCircuitOptimizationEnvironment(Environment):
     The agent acts as a quantum compiler, reducing circuit depth by applying
     mathematical identities and commutativity rules across 3 difficulty tiers.
 
+    Observation:
+        circuit       - Current list of QuantumGate objects
+        gate_count    - Number of gates remaining
+        num_qubits    - System qubit count
+        done          - Episode terminal flag
+        reward        - Last step reward
+        metadata      - task, initial_count, step, seed, used_advanced_actions
+
     Action types:
-        1 - Cancel identical self-inverse gate pairs
-        2 - Swap adjacent commuting gates (different qubits)
-        3 - Replace H-X-H sequence with Z gate
-        4 - Replace CNOT-SWAP sequence with CZ gate
+        1 - Cancel identical self-inverse gate pairs          (+1.0)
+        2 - Swap adjacent commuting gates (different qubits)  (-0.05)
+        3 - Replace H-X-H sequence with Z gate                (+2.0)
+        4 - Replace CNOT-SWAP sequence with CZ gate           (+1.0)
+        Invalid actions                                        (-0.1)
     """
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
-    SELF_INVERSE_GATES = {"H", "X", "Y", "Z", "CNOT", "CX", "CZ", "SWAP", "CCX", "TOFFOLI", "CSWAP", "FREDKIN"}
+    SELF_INVERSE_GATES = {
+        "H", "X", "Y", "Z", "CNOT", "CX", "CZ", "SWAP",
+        "CCX", "TOFFOLI", "CSWAP", "FREDKIN"
+    }
 
     def __init__(self, task: str = "random", seed: int = None):
+        # Also read from environment variable so Docker env_vars work
+        if task == "random":
+            task = os.getenv("QUANTUM_TASK", "random")
+
         self.mode = task
         if self.mode != "random" and self.mode not in TASK_CONFIGS:
-            raise ValueError(f"Unknown task: {task}. Must be 'random' or one of {list(TASK_CONFIGS.keys())}")
+            raise ValueError(
+                f"Unknown task: {task}. Must be 'random' or one of {list(TASK_CONFIGS.keys())}"
+            )
 
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._reset_count = 0
@@ -126,11 +145,21 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         self.task_config = TASK_CONFIGS["easy"]
         self._circuit: list[QuantumGate] = []
         self._initial_gate_count = 0
+        self._used_advanced_actions = False  # tracks action 3 or 4 usage this episode
 
-    def reset(self) -> QuantumObservation:
+    # ============================================================================
+    # OpenEnv API
+    # ============================================================================
+
+    def reset(self, seed: int = None, **kwargs) -> QuantumObservation:
         """Reset the environment to a fresh circuit for the configured task."""
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._reset_count += 1
+        self._used_advanced_actions = False
+
+        if seed is not None:
+            self.current_seed = seed
+            self.rng = random.Random(self.current_seed)
 
         if self.mode == "random":
             self.task_name = self.rng.choice(TASKS)
@@ -152,10 +181,11 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 "reset_count": self._reset_count,
                 "initial_count": self._initial_gate_count,
                 "seed": self.current_seed,
+                "used_advanced_actions": False,
             },
         )
 
-    def step(self, action: QuantumAction) -> QuantumObservation:  # type: ignore[override]
+    def step(self, action: QuantumAction, **kwargs) -> QuantumObservation:  # type: ignore[override]
         """Execute one action in the environment."""
         self._state.step_count += 1
         target_index = action.target_index
@@ -170,7 +200,9 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         gate_at_index = self._circuit[target_index]
         active_qubits = set(gate_at_index.target_qubits)
 
+        # ------------------------------------------------------------------
         # ACTION 1: Cancel Identical Self-Inverse Gates
+        # ------------------------------------------------------------------
         if action_type == 1:
             next_gate_index = None
             for j in range(target_index + 1, len(self._circuit)):
@@ -188,7 +220,9 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 reward = 1.0
                 action_result = "cancelled_identical"
 
+        # ------------------------------------------------------------------
         # ACTION 2: Swap Commuting Gates
+        # ------------------------------------------------------------------
         elif action_type == 2:
             if target_index + 1 < len(self._circuit):
                 next_gate = self._circuit[target_index + 1]
@@ -201,75 +235,105 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                     reward = -0.05
                     action_result = "swapped_commuting"
 
-        # ACTION 3: Replace H-X-H with Z
+        # ------------------------------------------------------------------
+        # ACTION 3: Replace H-X-H with Z  (advanced identity)
+        # ------------------------------------------------------------------
         elif action_type == 3:
             if target_index + 2 < len(self._circuit):
                 g1 = self._circuit[target_index]
                 g2 = self._circuit[target_index + 1]
                 g3 = self._circuit[target_index + 2]
+
                 if (g1.name == "H" and g2.name == "X" and g3.name == "H" and
                         g1.target_qubits == g2.target_qubits == g3.target_qubits):
                     self._circuit.pop(target_index + 2)
                     self._circuit.pop(target_index + 1)
-                    self._circuit[target_index] = QuantumGate(name="Z", target_qubits=g1.target_qubits)
+                    self._circuit[target_index] = QuantumGate(
+                        name="Z", target_qubits=g1.target_qubits
+                    )
                     reward = 2.0
                     action_result = "identity_hxh_to_z"
+                    self._used_advanced_actions = True  # track for medium grader
 
-        # ACTION 4: Replace CNOT-SWAP with CZ
+        # ------------------------------------------------------------------
+        # ACTION 4: Replace CNOT-SWAP with CZ  (advanced identity)
+        # ------------------------------------------------------------------
         elif action_type == 4:
             if target_index + 1 < len(self._circuit):
                 g1 = self._circuit[target_index]
                 g2 = self._circuit[target_index + 1]
+
                 if (g1.name == "CNOT" and g2.name == "SWAP" and
                         set(g1.target_qubits) == set(g2.target_qubits)):
                     self._circuit.pop(target_index + 1)
-                    self._circuit[target_index] = QuantumGate(name="CZ", target_qubits=g1.target_qubits)
+                    self._circuit[target_index] = QuantumGate(
+                        name="CZ", target_qubits=g1.target_qubits
+                    )
                     reward = 1.0
                     action_result = "identity_cnot_swap_to_cz"
+                    self._used_advanced_actions = True  # track for medium grader
 
         return self._build_observation(reward, action_result)
 
+    @property
+    def state(self) -> State:
+        return self._state
+
+    def get_metadata(self) -> EnvironmentMetadata:
+        """
+        Return human-readable metadata shown in the HF Space web UI and
+        consumed by the platform's agent during Phase 2 evaluation.
+        """
+        return EnvironmentMetadata(
+            name="Quantum Circuit Optimizer",
+            description=(
+                "RL environment where an agent acts as a quantum compiler, "
+                "reducing circuit depth by applying gate cancellation, "
+                "commutativity swaps, and algebraic identities "
+                "(H·X·H = Z, CNOT·SWAP = CZ) across 3 difficulty tiers "
+                "(2-qubit easy → 4-qubit medium → 6-qubit hard with deep entanglement)."
+            ),
+            version="0.1.0",
+        )
+
     # ============================================================================
-    # Grader Methods (OpenEnv validator calls these on the environment instance)
-    # Each grades the CURRENT internal circuit state — no arguments needed.
+    # Grader methods (called by OpenEnv validator on the environment instance)
     # ============================================================================
+
+    @staticmethod
+    def _strict(score: float) -> float:
+        """Clamp to strictly (0.0, 1.0) — platform rejects exactly 0.0 or 1.0."""
+        return max(0.01, min(0.99, float(score)))
 
     def grade_easy(self) -> float:
-        """
-        Grader for Easy Task.
-        Pure compression ratio — any reduction in gate count earns proportional score.
-        """
+        """Pure compression ratio — any gate removal earns proportional credit."""
         if self._initial_gate_count == 0:
-            return 1.0
-        final_count = len(self._circuit)
-        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
-        return max(0.0, min(1.0, compression))
+            return self._strict(0.5)
+        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
+        return self._strict(compression)
 
     def grade_medium(self) -> float:
-        """
-        Grader for Medium Task.
-        Scaled so that 20% compression = full score (1.0).
-        Partial credit below threshold encourages progress.
-        """
+        """Compression ratio + 0.15 bonus for using advanced identity actions."""
         if self._initial_gate_count == 0:
-            return 1.0
-        final_count = len(self._circuit)
-        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
-        scaled = compression / 0.20
-        return max(0.0, min(1.0, scaled))
+            return self._strict(0.5)
+        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
+        bonus = 0.15 if self._used_advanced_actions else 0.0
+        return self._strict(compression + bonus)
 
     def grade_hard(self) -> float:
-        """
-        Grader for Hard Task.
-        Scaled so that 35% compression = full score (1.0).
-        Harder threshold reflects genuine difficulty of deep entangled circuits.
-        """
+        """Weighted blend: 70% compression + 30% step efficiency."""
         if self._initial_gate_count == 0:
-            return 1.0
-        final_count = len(self._circuit)
-        compression = (self._initial_gate_count - final_count) / self._initial_gate_count
-        scaled = compression / 0.35
-        return max(0.0, min(1.0, scaled))
+            return self._strict(0.5)
+        compression = (self._initial_gate_count - len(self._circuit)) / self._initial_gate_count
+        step_efficiency = max(0.0, 1.0 - (self._state.step_count / 150))
+        score = 0.7 * compression + 0.3 * step_efficiency
+        return self._strict(score)
+
+    def grade(self) -> float:
+        """Grade current state using the active task's grader method."""
+        return {"easy": self.grade_easy, "medium": self.grade_medium, "hard": self.grade_hard}[
+            self.task_name
+        ]()
 
     # ============================================================================
     # Internal helpers
@@ -291,6 +355,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                 "step": self._state.step_count,
                 "initial_count": self._initial_gate_count,
                 "seed": self.current_seed,
+                "used_advanced_actions": self._used_advanced_actions,
             },
         )
 
@@ -298,6 +363,7 @@ class QuantumCircuitOptimizationEnvironment(Environment):
         if len(self._circuit) == 0:
             return True
 
+        # Check for any valid cancellation
         for i in range(len(self._circuit)):
             curr_gate = self._circuit[i]
             active_qubits = set(curr_gate.target_qubits)
@@ -311,22 +377,10 @@ class QuantumCircuitOptimizationEnvironment(Environment):
                         return False
                     break
 
+        # Check for any valid swap
         for i in range(len(self._circuit) - 1):
             if not set(self._circuit[i].target_qubits).intersection(
                     set(self._circuit[i + 1].target_qubits)):
                 return False
 
         return True
-
-    def grade(self) -> float:
-        """Grade current state using the active task's grader."""
-        grader_method = {
-            "easy": self.grade_easy,
-            "medium": self.grade_medium,
-            "hard": self.grade_hard,
-        }[self.task_name]
-        return grader_method()
-
-    @property
-    def state(self) -> State:
-        return self._state
